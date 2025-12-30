@@ -21,7 +21,6 @@ mod handlers;
 mod middleware;
 mod router;
 mod stream;
-pub mod token;
 pub mod types;
 
 pub use router::create_router_with_provider;

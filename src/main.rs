@@ -1,6 +1,7 @@
 mod anthropic;
 mod kiro;
 mod model;
+pub mod token;
 
 use clap::Parser;
 use kiro::model::credentials::KiroCredentials;
@@ -49,7 +50,7 @@ async fn main() {
     let kiro_provider = KiroProvider::new(token_manager);
 
     // 初始化 count_tokens 配置
-    anthropic::token::init_config(anthropic::token::CountTokensConfig {
+    token::init_config(token::CountTokensConfig {
         api_url: config.count_tokens_api_url.clone(),
         api_key: config.count_tokens_api_key.clone(),
         auth_type: config.count_tokens_auth_type.clone(),
