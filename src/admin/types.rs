@@ -177,3 +177,16 @@ impl AdminErrorResponse {
         Self::new("internal_error", message)
     }
 }
+
+// ============ 请求日志 ============
+
+/// 请求日志响应
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequestLogsResponse {
+    /// 日志总数
+    pub total: usize,
+    /// 日志条目列表（最新的在前）
+    pub logs: Vec<crate::request_log::RequestLogEntry>,
+}
+

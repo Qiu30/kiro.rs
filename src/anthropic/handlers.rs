@@ -99,6 +99,36 @@ pub async fn post_messages(
         }
     };
 
+    // 获取凭据上下文以记录使用的凭据 ID
+    let credential_id = match provider.token_manager().acquire_context().await {
+        Ok(ctx) => ctx.id,
+        Err(e) => {
+            tracing::error!("获取凭据上下文失败: {}", e);
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse::new(
+                    "service_unavailable",
+                    "No available credentials",
+                )),
+            )
+                .into_response();
+        }
+    };
+
+    // 记录请求日志
+    if let Some(logger) = &state.request_logger {
+        logger.log_request(crate::request_log::RequestLogEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            model: payload.model.clone(),
+            max_tokens: payload.max_tokens,
+            stream: payload.stream,
+            message_count: payload.messages.len(),
+            credential_id,
+            success: true, // 默认成功，后续可以根据实际结果更新
+        });
+    }
+
     // 转换请求
     let conversion_result = match convert_request(&payload) {
         Ok(result) => result,

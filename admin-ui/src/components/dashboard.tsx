@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { CredentialCard } from '@/components/credential-card'
 import { BalanceDialog } from '@/components/balance-dialog'
 import { AddCredentialDialog } from '@/components/add-credential-dialog'
+import { RequestLog } from '@/components/request-log'
 import { useCredentials } from '@/hooks/use-credentials'
 
 interface DashboardProps {
@@ -166,6 +167,11 @@ export function Dashboard({ onLogout }: DashboardProps) {
               ))}
             </div>
           )}
+        </div>
+
+        {/* 请求日志 */}
+        <div className="mt-6">
+          <RequestLog />
         </div>
       </main>
 

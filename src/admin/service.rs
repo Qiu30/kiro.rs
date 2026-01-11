@@ -4,11 +4,12 @@ use std::sync::Arc;
 
 use crate::kiro::model::credentials::KiroCredentials;
 use crate::kiro::token_manager::MultiTokenManager;
+use crate::request_log::RequestLogger;
 
 use super::error::AdminServiceError;
 use super::types::{
     AddCredentialRequest, AddCredentialResponse, BalanceResponse, CredentialStatusItem,
-    CredentialsStatusResponse,
+    CredentialsStatusResponse, RequestLogsResponse,
 };
 
 /// Admin 服务
@@ -16,11 +17,12 @@ use super::types::{
 /// 封装所有 Admin API 的业务逻辑
 pub struct AdminService {
     token_manager: Arc<MultiTokenManager>,
+    request_logger: Option<Arc<RequestLogger>>,
 }
 
 impl AdminService {
-    pub fn new(token_manager: Arc<MultiTokenManager>) -> Self {
-        Self { token_manager }
+    pub fn new(token_manager: Arc<MultiTokenManager>, request_logger: Option<Arc<RequestLogger>>) -> Self {
+        Self { token_manager, request_logger }
     }
 
     /// 获取所有凭据状态
@@ -227,6 +229,22 @@ impl AdminService {
             AdminServiceError::InvalidCredential(msg)
         } else {
             AdminServiceError::InternalError(msg)
+        }
+    }
+
+    /// 获取请求日志
+    pub fn get_request_logs(&self) -> RequestLogsResponse {
+        if let Some(logger) = &self.request_logger {
+            let logs = logger.get_logs();
+            RequestLogsResponse {
+                total: logs.len(),
+                logs,
+            }
+        } else {
+            RequestLogsResponse {
+                total: 0,
+                logs: vec![],
+            }
         }
     }
 }

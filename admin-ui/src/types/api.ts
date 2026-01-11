@@ -67,3 +67,21 @@ export interface AddCredentialResponse {
   message: string
   credentialId: number
 }
+
+// 请求日志条目
+export interface RequestLogEntry {
+  id: string
+  timestamp: string
+  model: string
+  maxTokens: number
+  stream: boolean
+  messageCount: number
+  credentialId: number
+  success: boolean
+}
+
+// 请求日志响应
+export interface RequestLogsResponse {
+  total: number
+  logs: RequestLogEntry[]
+}

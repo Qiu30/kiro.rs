@@ -8,6 +8,7 @@ import type {
   SetPriorityRequest,
   AddCredentialRequest,
   AddCredentialResponse,
+  RequestLogsResponse,
 } from '@/types/api'
 
 // 创建 axios 实例
@@ -84,3 +85,10 @@ export async function deleteCredential(id: number): Promise<SuccessResponse> {
   const { data } = await api.delete<SuccessResponse>(`/credentials/${id}`)
   return data
 }
+
+// 获取请求日志
+export async function getRequestLogs(): Promise<RequestLogsResponse> {
+  const { data } = await api.get<RequestLogsResponse>('/logs')
+  return data
+}
+

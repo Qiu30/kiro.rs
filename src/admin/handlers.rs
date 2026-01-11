@@ -102,3 +102,11 @@ pub async fn delete_credential(
         Err(e) => (e.status_code(), Json(e.into_response())).into_response(),
     }
 }
+
+/// GET /api/admin/logs
+/// 获取请求日志
+pub async fn get_request_logs(State(state): State<AdminState>) -> impl IntoResponse {
+    let response = state.service.get_request_logs();
+    Json(response)
+}
+

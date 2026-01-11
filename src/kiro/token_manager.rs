@@ -375,6 +375,8 @@ struct CredentialEntry {
     disabled: bool,
     /// 禁用原因（用于区分手动禁用 vs 自动禁用，便于自愈）
     disabled_reason: Option<DisabledReason>,
+    /// 最后使用时间（用于负载均衡冷却）
+    last_used_at: Option<std::time::Instant>,
 }
 
 /// 禁用原因
@@ -499,6 +501,7 @@ impl MultiTokenManager {
                     failure_count: 0,
                     disabled: false,
                     disabled_reason: None,
+                    last_used_at: None,
                 }
             })
             .collect();
@@ -580,6 +583,7 @@ impl MultiTokenManager {
     pub async fn acquire_context(&self) -> anyhow::Result<CallContext> {
         let total = self.total_count();
         let mut tried_count = 0;
+        const COOLDOWN_DURATION: std::time::Duration = std::time::Duration::from_secs(30);
 
         loop {
             if tried_count >= total {
@@ -592,57 +596,69 @@ impl MultiTokenManager {
 
             let (id, credentials) = {
                 let mut entries = self.entries.lock();
-                let current_id = *self.current_id.lock();
+                let now = std::time::Instant::now();
 
-                // 找到当前凭据
-                if let Some(entry) = entries.iter().find(|e| e.id == current_id && !e.disabled) {
-                    (entry.id, entry.credentials.clone())
-                } else {
-                    // 当前凭据不可用，选择优先级最高的可用凭据
-                    let mut best = entries
-                        .iter()
-                        .filter(|e| !e.disabled)
-                        .min_by_key(|e| e.credentials.priority);
-
-                    // 没有可用凭据：如果是“自动禁用导致全灭”，做一次类似重启的自愈
-                    if best.is_none()
-                        && entries.iter().any(|e| {
-                            e.disabled && e.disabled_reason == Some(DisabledReason::TooManyFailures)
-                        })
-                    {
-                        tracing::warn!(
-                            "所有凭据均已被自动禁用，执行自愈：重置失败计数并重新启用（等价于重启）"
-                        );
-                        for e in entries.iter_mut() {
-                            if e.disabled_reason == Some(DisabledReason::TooManyFailures) {
-                                e.disabled = false;
-                                e.disabled_reason = None;
-                                e.failure_count = 0;
-                            }
+                // 没有可用凭据：如果是"自动禁用导致全灭"，做一次类似重启的自愈
+                if entries.iter().all(|e| e.disabled)
+                    && entries.iter().any(|e| {
+                        e.disabled && e.disabled_reason == Some(DisabledReason::TooManyFailures)
+                    })
+                {
+                    tracing::warn!(
+                        "所有凭据均已被自动禁用，执行自愈：重置失败计数并重新启用（等价于重启）"
+                    );
+                    for e in entries.iter_mut() {
+                        if e.disabled_reason == Some(DisabledReason::TooManyFailures) {
+                            e.disabled = false;
+                            e.disabled_reason = None;
+                            e.failure_count = 0;
                         }
-                        best = entries
-                            .iter()
-                            .filter(|e| !e.disabled)
-                            .min_by_key(|e| e.credentials.priority);
-                    }
-
-                    if let Some(entry) = best {
-                        // 先提取数据
-                        let new_id = entry.id;
-                        let new_creds = entry.credentials.clone();
-                        drop(entries);
-                        // 更新 current_id
-                        let mut current_id = self.current_id.lock();
-                        *current_id = new_id;
-                        (new_id, new_creds)
-                    } else {
-                        // 注意：必须在 bail! 之前计算 available_count，
-                        // 因为 available_count() 会尝试获取 entries 锁，
-                        // 而此时我们已经持有该锁，会导致死锁
-                        let available = entries.iter().filter(|e| !e.disabled).count();
-                        anyhow::bail!("所有凭据均已禁用（{}/{}）", available, total);
                     }
                 }
+
+                // 筛选可用凭据（未禁用 + 不在冷却期）
+                let available: Vec<usize> = entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| {
+                        !e.disabled
+                            && e.last_used_at
+                                .map(|t| now.duration_since(t) >= COOLDOWN_DURATION)
+                                .unwrap_or(true)
+                    })
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                let selected_idx = if !available.is_empty() {
+                    // 随机选择一个可用凭据
+                    let rand_idx = fastrand::usize(..available.len());
+                    available[rand_idx]
+                } else {
+                    // 所有凭据都在冷却期或已禁用，使用最久未使用的凭据（LRU 策略）
+                    entries
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, e)| !e.disabled)
+                        .min_by_key(|(_, e)| e.last_used_at)
+                        .map(|(idx, _)| idx)
+                        .ok_or_else(|| {
+                            let available = entries.iter().filter(|e| !e.disabled).count();
+                            anyhow::anyhow!("所有凭据均已禁用（{}/{}）", available, total)
+                        })?
+                };
+
+                // 更新最后使用时间
+                entries[selected_idx].last_used_at = Some(now);
+
+                let selected_id = entries[selected_idx].id;
+                let selected_creds = entries[selected_idx].credentials.clone();
+
+                // 更新 current_id
+                drop(entries);
+                let mut current_id = self.current_id.lock();
+                *current_id = selected_id;
+
+                (selected_id, selected_creds)
             };
 
             // 尝试获取/刷新 Token
@@ -1170,6 +1186,7 @@ impl MultiTokenManager {
                 failure_count: 0,
                 disabled: false,
                 disabled_reason: None,
+                last_used_at: None,
             });
         }
 

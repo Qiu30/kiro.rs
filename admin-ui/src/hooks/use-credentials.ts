@@ -7,6 +7,7 @@ import {
   getCredentialBalance,
   addCredential,
   deleteCredential,
+  getRequestLogs,
 } from '@/api/credentials'
 import type { AddCredentialRequest } from '@/types/api'
 
@@ -83,5 +84,14 @@ export function useDeleteCredential() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
     },
+  })
+}
+
+// 查询请求日志
+export function useRequestLogs() {
+  return useQuery({
+    queryKey: ['request-logs'],
+    queryFn: getRequestLogs,
+    refetchInterval: 2000, // 每 2 秒刷新一次，实现实时效果
   })
 }
