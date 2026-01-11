@@ -5,6 +5,7 @@ mod common;
 mod http_client;
 mod kiro;
 mod model;
+mod openai;
 pub mod token;
 mod request_log;
 
@@ -107,10 +108,21 @@ async fn main() {
     // 构建 Anthropic API 路由（从第一个凭据获取 profile_arn）
     let anthropic_app = anthropic::create_router_with_provider(
         &api_key,
+        Some(kiro_provider.clone()),
+        first_credentials.profile_arn.clone(),
+        Some(request_logger.clone()),
+    );
+
+    // 构建 OpenAI 兼容 API 路由
+    let openai_app = openai::create_router_with_provider(
+        &api_key,
         Some(kiro_provider),
         first_credentials.profile_arn.clone(),
         Some(request_logger.clone()),
     );
+
+    // 合并 Anthropic 和 OpenAI 路由
+    let combined_app = anthropic_app.merge(openai_app);
 
     // 构建 Admin API 路由（如果配置了非空的 admin_api_key）
     // 安全检查：空字符串被视为未配置，防止空 key 绕过认证
@@ -123,7 +135,7 @@ async fn main() {
     let app = if let Some(admin_key) = &config.admin_api_key {
         if admin_key.trim().is_empty() {
             tracing::warn!("admin_api_key 配置为空，Admin API 未启用");
-            anthropic_app
+            combined_app
         } else {
             let admin_service = admin::AdminService::new(token_manager.clone(), Some(request_logger.clone()));
             let admin_state = admin::AdminState::new(admin_key, admin_service);
@@ -134,22 +146,23 @@ async fn main() {
 
             tracing::info!("Admin API 已启用");
             tracing::info!("Admin UI 已启用: /admin");
-            anthropic_app
+            combined_app
                 .nest("/api/admin", admin_app)
                 .nest("/admin", admin_ui_app)
         }
     } else {
-        anthropic_app
+        combined_app
     };
 
     // 启动服务器
     let addr = format!("{}:{}", config.host, config.port);
-    tracing::info!("启动 Anthropic API 端点: {}", addr);
+    tracing::info!("启动 API 端点: {}", addr);
     tracing::info!("API Key: {}***", &api_key[..(api_key.len() / 2)]);
     tracing::info!("可用 API:");
     tracing::info!("  GET  /v1/models");
     tracing::info!("  POST /v1/messages");
     tracing::info!("  POST /v1/messages/count_tokens");
+    tracing::info!("  POST /v1/chat/completions (OpenAI 兼容)");
     if admin_key_valid {
         tracing::info!("Admin API:");
         tracing::info!("  GET  /api/admin/credentials");

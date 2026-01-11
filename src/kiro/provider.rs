@@ -28,6 +28,7 @@ const MAX_TOTAL_RETRIES: usize = 9;
 ///
 /// 核心组件，负责与 Kiro API 通信
 /// 支持多凭据故障转移和重试机制
+#[derive(Clone)]
 pub struct KiroProvider {
     token_manager: Arc<MultiTokenManager>,
     client: Client,
