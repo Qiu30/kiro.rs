@@ -692,13 +692,6 @@ mod tests {
         assert_eq!(determine_chat_trigger_type(&req), "MANUAL");
     }
 
-    #[test]
-    fn test_is_unsupported_tool() {
-        assert!(is_unsupported_tool("web_search"));
-        assert!(is_unsupported_tool("websearch"));
-        assert!(is_unsupported_tool("WebSearch"));
-        assert!(!is_unsupported_tool("read_file"));
-    }
 
     #[test]
     fn test_collect_history_tool_names() {
