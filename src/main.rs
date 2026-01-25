@@ -100,6 +100,7 @@ async fn main() {
         api_key: config.count_tokens_api_key.clone(),
         auth_type: config.count_tokens_auth_type.clone(),
         proxy: proxy_config,
+        tls_backend: config.tls_backend,
     });
 
     // 创建请求日志记录器
