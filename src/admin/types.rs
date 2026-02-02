@@ -38,6 +38,9 @@ pub struct CredentialStatusItem {
     pub auth_method: Option<String>,
     /// 是否有 Profile ARN
     pub has_profile_arn: bool,
+    /// 允许访问的模型列表（空列表表示支持所有模型）
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub allowed_models: Vec<String>,
 }
 
 // ============ 操作请求 ============
@@ -86,6 +89,11 @@ pub struct AddCredentialRequest {
     /// 凭据级 Machine ID（可选，64 位字符串）
     /// 未配置时回退到 config.json 的 machineId
     pub machine_id: Option<String>,
+
+    /// 允许访问的模型列表（可选）
+    /// 空列表或未配置时表示支持所有模型
+    #[serde(default)]
+    pub allowed_models: Vec<String>,
 }
 
 fn default_auth_method() -> String {
@@ -100,6 +108,54 @@ pub struct AddCredentialResponse {
     pub message: String,
     /// 新添加的凭据 ID
     pub credential_id: u64,
+}
+
+/// 更新凭据请求
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCredentialRequest {
+    /// 刷新令牌（可选，不传则保持原值）
+    pub refresh_token: Option<String>,
+
+    /// 认证方式（可选）
+    pub auth_method: Option<String>,
+
+    /// OIDC Client ID（可选）
+    pub client_id: Option<String>,
+
+    /// OIDC Client Secret（可选）
+    pub client_secret: Option<String>,
+
+    /// 凭据级 Region 配置（可选）
+    pub region: Option<String>,
+
+    /// 优先级（可选）
+    pub priority: Option<u32>,
+
+    /// 允许访问的模型列表（可选）
+    pub allowed_models: Option<Vec<String>>,
+}
+
+/// 凭据详情响应
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialDetailResponse {
+    /// 凭据 ID
+    pub id: u64,
+    /// 优先级
+    pub priority: u32,
+    /// 认证方式
+    pub auth_method: Option<String>,
+    /// 凭据级 Region
+    pub region: Option<String>,
+    /// 是否有 Refresh Token
+    pub has_refresh_token: bool,
+    /// 是否有 Client ID
+    pub has_client_id: bool,
+    /// 是否有 Client Secret
+    pub has_client_secret: bool,
+    /// 允许访问的模型列表
+    pub allowed_models: Vec<String>,
 }
 
 // ============ 余额查询 ============

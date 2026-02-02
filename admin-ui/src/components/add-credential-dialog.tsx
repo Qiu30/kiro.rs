@@ -9,8 +9,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useAddCredential } from '@/hooks/use-credentials'
 import { extractErrorMessage } from '@/lib/utils'
+import { SUPPORTED_MODELS } from '@/types/api'
 
 interface AddCredentialDialogProps {
   open: boolean
@@ -26,6 +28,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [priority, setPriority] = useState('0')
+  const [allowedModels, setAllowedModels] = useState<string[]>([])
 
   const { mutate, isPending } = useAddCredential()
 
@@ -36,6 +39,15 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
     setClientId('')
     setClientSecret('')
     setPriority('0')
+    setAllowedModels([])
+  }
+
+  const handleModelToggle = (model: string) => {
+    setAllowedModels((prev) =>
+      prev.includes(model)
+        ? prev.filter((m) => m !== model)
+        : [...prev, model]
+    )
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,6 +73,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
         clientId: clientId.trim() || undefined,
         clientSecret: clientSecret.trim() || undefined,
         priority: parseInt(priority) || 0,
+        allowedModels: allowedModels.length > 0 ? allowedModels : undefined,
       },
       {
         onSuccess: (data) => {
@@ -176,6 +189,34 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
               />
               <p className="text-xs text-muted-foreground">
                 数字越小优先级越高，默认为 0
+              </p>
+            </div>
+
+            {/* 允许的模型 */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                允许的模型
+              </label>
+              <div className="space-y-2">
+                {SUPPORTED_MODELS.map((model) => (
+                  <div key={model.value} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`model-${model.value}`}
+                      checked={allowedModels.includes(model.value)}
+                      onCheckedChange={() => handleModelToggle(model.value)}
+                      disabled={isPending}
+                    />
+                    <label
+                      htmlFor={`model-${model.value}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {model.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                不选择任何模型表示支持所有模型
               </p>
             </div>
           </div>

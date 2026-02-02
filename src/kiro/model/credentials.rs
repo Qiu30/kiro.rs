@@ -57,6 +57,13 @@ pub struct KiroCredentials {
     /// 未配置时回退到 config.json 的 machineId；都未配置时由 refreshToken 派生
     #[serde(skip_serializing_if = "Option::is_none")]
     pub machine_id: Option<String>,
+
+    /// 允许访问的模型列表（可选）
+    /// 空列表或未配置时表示支持所有模型
+    /// 支持的值: "sonnet", "opus", "haiku"
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub allowed_models: Vec<String>,
 }
 
 /// 判断是否为零（用于跳过序列化）
@@ -188,6 +195,45 @@ impl KiroCredentials {
             self.auth_method = Some(canonical.to_string());
         }
     }
+
+    /// 检查凭据是否支持指定的模型
+    ///
+    /// # Arguments
+    /// * `model` - 模型名称（如 "sonnet", "opus", "haiku" 或完整模型 ID）
+    ///
+    /// # Returns
+    /// - `true` - 支持该模型（allowed_models 为空或包含该模型）
+    /// - `false` - 不支持该模型
+    pub fn supports_model(&self, model: &str) -> bool {
+        // 空列表表示支持所有模型
+        if self.allowed_models.is_empty() {
+            return true;
+        }
+
+        // 标准化模型名称（从完整模型 ID 提取简短名称）
+        let normalized = normalize_model_name(model);
+
+        // 检查是否在允许列表中
+        self.allowed_models
+            .iter()
+            .any(|m| m.eq_ignore_ascii_case(normalized))
+    }
+}
+
+/// 标准化模型名称
+///
+/// 将完整模型 ID（如 "claude-sonnet-4-5-20250929"）转换为简短名称（如 "sonnet"）
+fn normalize_model_name(model: &str) -> &str {
+    let model_lower = model.to_lowercase();
+    if model_lower.contains("sonnet") {
+        "sonnet"
+    } else if model_lower.contains("opus") {
+        "opus"
+    } else if model_lower.contains("haiku") {
+        "haiku"
+    } else {
+        model
+    }
 }
 
 #[cfg(test)]
@@ -237,6 +283,7 @@ mod tests {
             priority: 0,
             region: None,
             machine_id: None,
+            allowed_models: vec![],
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -245,6 +292,8 @@ mod tests {
         assert!(!json.contains("refreshToken"));
         // priority 为 0 时不序列化
         assert!(!json.contains("priority"));
+        // allowed_models 为空时不序列化
+        assert!(!json.contains("allowedModels"));
     }
 
     #[test]
@@ -347,6 +396,7 @@ mod tests {
             priority: 0,
             region: Some("eu-west-1".to_string()),
             machine_id: None,
+            allowed_models: vec![],
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -369,6 +419,7 @@ mod tests {
             priority: 0,
             region: None,
             machine_id: None,
+            allowed_models: vec![],
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -473,6 +524,7 @@ mod tests {
             priority: 3,
             region: Some("us-west-2".to_string()),
             machine_id: Some("c".repeat(64)),
+            allowed_models: vec!["sonnet".to_string(), "opus".to_string()],
         };
 
         let json = original.to_pretty_json().unwrap();
@@ -484,5 +536,75 @@ mod tests {
         assert_eq!(parsed.priority, original.priority);
         assert_eq!(parsed.region, original.region);
         assert_eq!(parsed.machine_id, original.machine_id);
+        assert_eq!(parsed.allowed_models, original.allowed_models);
+    }
+
+    // ============ AllowedModels 字段测试 ============
+
+    #[test]
+    fn test_allowed_models_empty_supports_all() {
+        let creds = KiroCredentials::default();
+        assert!(creds.supports_model("sonnet"));
+        assert!(creds.supports_model("opus"));
+        assert!(creds.supports_model("haiku"));
+        assert!(creds.supports_model("claude-sonnet-4-5-20250929"));
+    }
+
+    #[test]
+    fn test_allowed_models_specific() {
+        let mut creds = KiroCredentials::default();
+        creds.allowed_models = vec!["sonnet".to_string()];
+
+        assert!(creds.supports_model("sonnet"));
+        assert!(creds.supports_model("claude-sonnet-4-5-20250929"));
+        assert!(!creds.supports_model("opus"));
+        assert!(!creds.supports_model("haiku"));
+    }
+
+    #[test]
+    fn test_allowed_models_case_insensitive() {
+        let mut creds = KiroCredentials::default();
+        creds.allowed_models = vec!["SONNET".to_string(), "Opus".to_string()];
+
+        assert!(creds.supports_model("sonnet"));
+        assert!(creds.supports_model("SONNET"));
+        assert!(creds.supports_model("opus"));
+        assert!(creds.supports_model("OPUS"));
+        assert!(!creds.supports_model("haiku"));
+    }
+
+    #[test]
+    fn test_allowed_models_full_model_id() {
+        let mut creds = KiroCredentials::default();
+        creds.allowed_models = vec!["opus".to_string()];
+
+        assert!(creds.supports_model("claude-opus-4-5-20251101"));
+        assert!(!creds.supports_model("claude-sonnet-4-5-20250929"));
+    }
+
+    #[test]
+    fn test_allowed_models_serialization() {
+        let mut creds = KiroCredentials::default();
+        creds.refresh_token = Some("test".to_string());
+        creds.allowed_models = vec!["sonnet".to_string(), "opus".to_string()];
+
+        let json = creds.to_pretty_json().unwrap();
+        assert!(json.contains("allowedModels"));
+        assert!(json.contains("sonnet"));
+        assert!(json.contains("opus"));
+    }
+
+    #[test]
+    fn test_allowed_models_parsing() {
+        let json = r#"{
+            "refreshToken": "test",
+            "allowedModels": ["sonnet", "haiku"]
+        }"#;
+
+        let creds = KiroCredentials::from_json(json).unwrap();
+        assert_eq!(creds.allowed_models, vec!["sonnet", "haiku"]);
+        assert!(creds.supports_model("sonnet"));
+        assert!(creds.supports_model("haiku"));
+        assert!(!creds.supports_model("opus"));
     }
 }

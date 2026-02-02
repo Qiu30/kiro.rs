@@ -16,6 +16,7 @@ export interface CredentialStatusItem {
   expiresAt: string | null
   authMethod: string | null
   hasProfileArn: boolean
+  allowedModels?: string[]
 }
 
 // 余额响应
@@ -60,6 +61,7 @@ export interface AddCredentialRequest {
   clientSecret?: string
   priority?: number
   region?: string
+  allowedModels?: string[]
 }
 
 // 添加凭据响应
@@ -68,6 +70,36 @@ export interface AddCredentialResponse {
   message: string
   credentialId: number
 }
+
+// 更新凭据请求
+export interface UpdateCredentialRequest {
+  refreshToken?: string
+  authMethod?: 'social' | 'idc'
+  clientId?: string
+  clientSecret?: string
+  region?: string
+  priority?: number
+  allowedModels?: string[]
+}
+
+// 凭据详情响应
+export interface CredentialDetailResponse {
+  id: number
+  priority: number
+  authMethod: string | null
+  region: string | null
+  hasRefreshToken: boolean
+  hasClientId: boolean
+  hasClientSecret: boolean
+  allowedModels: string[]
+}
+
+// 支持的模型列表
+export const SUPPORTED_MODELS = [
+  { value: 'sonnet', label: 'Claude Sonnet 4.5' },
+  { value: 'opus', label: 'Claude Opus 4.5' },
+  { value: 'haiku', label: 'Claude Haiku 4.5' },
+] as const
 
 // 请求日志条目
 export interface RequestLogEntry {

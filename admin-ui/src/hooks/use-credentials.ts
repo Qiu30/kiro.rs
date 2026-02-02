@@ -8,8 +8,10 @@ import {
   addCredential,
   deleteCredential,
   getRequestLogs,
+  getCredentialDetail,
+  updateCredential,
 } from '@/api/credentials'
-import type { AddCredentialRequest } from '@/types/api'
+import type { AddCredentialRequest, UpdateCredentialRequest } from '@/types/api'
 
 // 查询凭据列表
 export function useCredentials() {
@@ -93,5 +95,27 @@ export function useRequestLogs() {
     queryKey: ['request-logs'],
     queryFn: getRequestLogs,
     refetchInterval: 2000, // 每 2 秒刷新一次，实现实时效果
+  })
+}
+
+// 查询凭据详情
+export function useCredentialDetail(id: number | null) {
+  return useQuery({
+    queryKey: ['credential-detail', id],
+    queryFn: () => getCredentialDetail(id!),
+    enabled: id !== null,
+  })
+}
+
+// 更新凭据
+export function useUpdateCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: UpdateCredentialRequest }) =>
+      updateCredential(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credentials'] })
+      queryClient.invalidateQueries({ queryKey: ['credential-detail'] })
+    },
   })
 }

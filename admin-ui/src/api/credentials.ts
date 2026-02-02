@@ -9,6 +9,8 @@ import type {
   AddCredentialRequest,
   AddCredentialResponse,
   RequestLogsResponse,
+  UpdateCredentialRequest,
+  CredentialDetailResponse,
 } from '@/types/api'
 
 // 创建 axios 实例
@@ -89,6 +91,21 @@ export async function deleteCredential(id: number): Promise<SuccessResponse> {
 // 获取请求日志
 export async function getRequestLogs(): Promise<RequestLogsResponse> {
   const { data } = await api.get<RequestLogsResponse>('/logs')
+  return data
+}
+
+// 获取凭据详情
+export async function getCredentialDetail(id: number): Promise<CredentialDetailResponse> {
+  const { data } = await api.get<CredentialDetailResponse>(`/credentials/${id}`)
+  return data
+}
+
+// 更新凭据
+export async function updateCredential(
+  id: number,
+  req: UpdateCredentialRequest
+): Promise<SuccessResponse> {
+  const { data } = await api.put<SuccessResponse>(`/credentials/${id}`, req)
   return data
 }
 

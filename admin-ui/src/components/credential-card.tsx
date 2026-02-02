@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { RefreshCw, ChevronUp, ChevronDown, Wallet, Trash2 } from 'lucide-react'
+import { RefreshCw, ChevronUp, ChevronDown, Wallet, Trash2, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,12 +15,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { CredentialStatusItem } from '@/types/api'
+import { SUPPORTED_MODELS } from '@/types/api'
 import {
   useSetDisabled,
   useSetPriority,
   useResetFailure,
   useDeleteCredential,
 } from '@/hooks/use-credentials'
+import { EditCredentialDialog } from './edit-credential-dialog'
 
 interface CredentialCardProps {
   credential: CredentialStatusItem
@@ -33,10 +35,21 @@ function formatAuthMethodLabel(authMethod: string | null): string {
   return authMethod
 }
 
+function formatAllowedModels(allowedModels?: string[]): string {
+  if (!allowedModels || allowedModels.length === 0) return '全部模型'
+  return allowedModels
+    .map((m) => {
+      const model = SUPPORTED_MODELS.find((sm) => sm.value === m.toLowerCase())
+      return model ? model.label : m
+    })
+    .join(', ')
+}
+
 export function CredentialCard({ credential, onViewBalance }: CredentialCardProps) {
   const [editingPriority, setEditingPriority] = useState(false)
   const [priorityValue, setPriorityValue] = useState(String(credential.priority))
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
 
   const setDisabled = useSetDisabled()
   const setPriority = useSetPriority()
@@ -196,6 +209,10 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
               <span className="text-muted-foreground">Token 有效期：</span>
               <span className="font-medium">{formatExpiry(credential.expiresAt)}</span>
             </div>
+            <div className="col-span-2">
+              <span className="text-muted-foreground">允许的模型：</span>
+              <span className="font-medium">{formatAllowedModels(credential.allowedModels)}</span>
+            </div>
             {credential.hasProfileArn && (
               <div className="col-span-2">
                 <Badge variant="secondary">有 Profile ARN</Badge>
@@ -205,6 +222,14 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
 
           {/* 操作按钮 */}
           <div className="flex flex-wrap gap-2 pt-2 border-t">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowEditDialog(true)}
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              编辑
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -299,6 +324,13 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 编辑凭据对话框 */}
+      <EditCredentialDialog
+        credentialId={credential.id}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+      />
     </>
   )
 }

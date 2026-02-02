@@ -101,7 +101,7 @@ pub async fn post_messages(
     };
 
     // 获取凭据上下文以记录使用的凭据 ID
-    let credential_id = match provider.token_manager().acquire_context().await {
+    let credential_id = match provider.token_manager().acquire_context(Some(&payload.model)).await {
         Ok(ctx) => ctx.id,
         Err(e) => {
             tracing::error!("获取凭据上下文失败: {}", e);
@@ -229,7 +229,7 @@ async fn handle_stream_request(
     thinking_enabled: bool,
 ) -> Response {
     // 调用 Kiro API（支持多凭据故障转移）
-    let response = match provider.call_api_stream(request_body).await {
+    let response = match provider.call_api_stream(request_body, Some(model)).await {
         Ok(resp) => resp,
         Err(e) => {
             tracing::error!("Kiro API 调用失败: {}", e);
@@ -374,7 +374,7 @@ async fn handle_non_stream_request(
     input_tokens: i32,
 ) -> Response {
     // 调用 Kiro API（支持多凭据故障转移）
-    let response = match provider.call_api(request_body).await {
+    let response = match provider.call_api(request_body, Some(model)).await {
         Ok(resp) => resp,
         Err(e) => {
             tracing::error!("Kiro API 调用失败: {}", e);
@@ -687,7 +687,7 @@ async fn handle_stream_request_buffered(
     thinking_enabled: bool,
 ) -> Response {
     // 调用 Kiro API（支持多凭据故障转移）
-    let response = match provider.call_api_stream(request_body).await {
+    let response = match provider.call_api_stream(request_body, Some(model)).await {
         Ok(resp) => resp,
         Err(e) => {
             tracing::error!("Kiro API 调用失败: {}", e);

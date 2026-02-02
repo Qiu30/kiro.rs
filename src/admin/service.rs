@@ -3,13 +3,13 @@
 use std::sync::Arc;
 
 use crate::kiro::model::credentials::KiroCredentials;
-use crate::kiro::token_manager::MultiTokenManager;
+use crate::kiro::token_manager::{CredentialUpdates, MultiTokenManager};
 use crate::request_log::RequestLogger;
 
 use super::error::AdminServiceError;
 use super::types::{
-    AddCredentialRequest, AddCredentialResponse, BalanceResponse, CredentialStatusItem,
-    CredentialsStatusResponse, RequestLogsResponse,
+    AddCredentialRequest, AddCredentialResponse, BalanceResponse, CredentialDetailResponse,
+    CredentialStatusItem, CredentialsStatusResponse, RequestLogsResponse, UpdateCredentialRequest,
 };
 
 /// Admin 服务
@@ -41,6 +41,7 @@ impl AdminService {
                 expires_at: entry.expires_at,
                 auth_method: entry.auth_method,
                 has_profile_arn: entry.has_profile_arn,
+                allowed_models: entry.allowed_models,
             })
             .collect();
 
@@ -132,6 +133,7 @@ impl AdminService {
             priority: req.priority,
             region: req.region,
             machine_id: req.machine_id,
+            allowed_models: req.allowed_models,
         };
 
         // 调用 token_manager 添加凭据
@@ -153,6 +155,47 @@ impl AdminService {
         self.token_manager
             .delete_credential(id)
             .map_err(|e| self.classify_delete_error(e, id))
+    }
+
+    /// 获取凭据详情
+    pub fn get_credential_detail(&self, id: u64) -> Result<CredentialDetailResponse, AdminServiceError> {
+        let detail = self
+            .token_manager
+            .get_credential_detail(id)
+            .map_err(|e| self.classify_error(e, id))?;
+
+        Ok(CredentialDetailResponse {
+            id: detail.id,
+            priority: detail.priority,
+            auth_method: detail.auth_method,
+            region: detail.region,
+            has_refresh_token: detail.has_refresh_token,
+            has_client_id: detail.has_client_id,
+            has_client_secret: detail.has_client_secret,
+            allowed_models: detail.allowed_models,
+        })
+    }
+
+    /// 更新凭据
+    pub async fn update_credential(
+        &self,
+        id: u64,
+        req: UpdateCredentialRequest,
+    ) -> Result<(), AdminServiceError> {
+        let updates = CredentialUpdates {
+            refresh_token: req.refresh_token,
+            auth_method: req.auth_method,
+            client_id: req.client_id,
+            client_secret: req.client_secret,
+            region: req.region,
+            priority: req.priority,
+            allowed_models: req.allowed_models,
+        };
+
+        self.token_manager
+            .update_credential(id, updates)
+            .await
+            .map_err(|e| self.classify_update_error(e, id))
     }
 
     /// 分类简单操作错误（set_disabled, set_priority, reset_and_enable）
@@ -229,6 +272,35 @@ impl AdminService {
             AdminServiceError::NotFound { id }
         } else if msg.contains("只能删除已禁用的凭据") {
             AdminServiceError::InvalidCredential(msg)
+        } else {
+            AdminServiceError::InternalError(msg)
+        }
+    }
+
+    /// 分类更新凭据错误
+    fn classify_update_error(&self, e: anyhow::Error, id: u64) -> AdminServiceError {
+        let msg = e.to_string();
+
+        // 凭据不存在
+        if msg.contains("不存在") {
+            return AdminServiceError::NotFound { id };
+        }
+
+        // 凭据验证失败
+        let is_invalid_credential = msg.contains("缺少 refreshToken")
+            || msg.contains("refreshToken 为空")
+            || msg.contains("refreshToken 已被截断")
+            || msg.contains("凭证已过期或无效")
+            || msg.contains("权限不足")
+            || msg.contains("已被限流");
+
+        if is_invalid_credential {
+            AdminServiceError::InvalidCredential(msg)
+        } else if msg.contains("error trying to connect")
+            || msg.contains("connection")
+            || msg.contains("timeout")
+        {
+            AdminServiceError::UpstreamError(msg)
         } else {
             AdminServiceError::InternalError(msg)
         }
